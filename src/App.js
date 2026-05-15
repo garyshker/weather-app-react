@@ -1,85 +1,100 @@
-import React from "react";
+import React, { useState } from "react";
 import Info from "./components/info";
-import Formula from "./formula";
+import SearchForm from "./formula";
 import Weather from "./components/weather";
 
-const API_KEY = "0aa1ef00ba1eef48b77caa7689dcfaea";
+const API_KEY = process.env.REACT_APP_API_KEY;
 
-class App extends React.Component {
+const getBgClass = (condition) => {
+  const map = {
+    Clear: "bg-clear",
+    Clouds: "bg-clouds",
+    Rain: "bg-rain",
+    Drizzle: "bg-rain",
+    Snow: "bg-snow",
+    Thunderstorm: "bg-thunder",
+    Mist: "bg-mist",
+    Fog: "bg-mist",
+    Haze: "bg-mist",
+  };
+  return map[condition] || "";
+};
 
+const App = () => {
+  const [weatherData, setWeatherData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  state = {
-    temp: undefined,
-    city: undefined,
-    country: undefined,
-    pressure: undefined,
-    sunset: undefined,
-    error: undefined
-  }
+  const getWeather = async (city) => {
+    if (!city.trim()) {
+      setError("Введите название города");
+      setWeatherData(null);
+      return;
+    }
 
-  gettingWeather = async (event) => {
-    event.preventDefault();
-    const city = event.target.city.value;
-    
-     
+    setLoading(true);
+    setError(null);
 
-if(city) {
-  const api_url = await 
-  fetch(`http://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`);
-  const data = await api_url.json();
+    try {
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=metric`
+      );
 
-  var sunset = data.sys.sunset;
-  var date = new Date();
-  date.setTime(sunset);
-  var sunset_date = date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
-  
-  this.setState ( {
-       temp: data.main.temp,
-       city: data.name,
-       country: data.sys.country,
-       sunset: sunset_date,
-       pressure: data.main.pressure,
-       error: undefined
-     });
-  } else {
-    this.setState ({
-      temp: undefined,
-    city: undefined,
-    country: undefined,
-    pressure: undefined,
-    sunset: undefined,
-    error: "Enter city name, please"
-    })
-  }
-}
+      if (!response.ok) {
+        throw new Error(
+          response.status === 404 ? "Город не найден" : "Ошибка загрузки данных"
+        );
+      }
 
-  render () {
-    return (
-      <div className="wrapper">
-       <div className="main">
-        <div className="container">
-          <div className="row">
-            <div className="col-sm-5 info">
-            <Info />
-            </div>
-            <div className="col-sm-7 form">
-            <Formula weatherMethod={this.gettingWeather} />    
-        <Weather 
-       temp={this.state.temp}
-       city={this.state.city}
-       country={this.state.country}
-       sunset={this.state.sunset}
-       pressure={this.state.pressure}
-       error={this.state.error}
-       />
-                   </div>
-          </div>
+      const data = await response.json();
+
+      setWeatherData({
+        temp: Math.round(data.main.temp),
+        feelsLike: Math.round(data.main.feels_like),
+        city: data.name,
+        country: data.sys.country,
+        pressure: data.main.pressure,
+        humidity: data.main.humidity,
+        windSpeed: data.wind.speed,
+        sunset: new Date(data.sys.sunset * 1000).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        sunrise: new Date(data.sys.sunrise * 1000).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        description: data.weather[0].description,
+        icon: data.weather[0].icon,
+        condition: data.weather[0].main,
+      });
+    } catch (err) {
+      setError(err.message);
+      setWeatherData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={`wrapper ${weatherData ? getBgClass(weatherData.condition) : ""}`}>
+      <div className="card">
+        <div className="left-panel">
+          <Info />
         </div>
-        </div> 
-        
+        <div className="right-panel">
+          <SearchForm onSearch={getWeather} />
+          {loading ? (
+            <div className="loading">
+              <div className="spinner"></div>
+            </div>
+          ) : (
+            <Weather data={weatherData} error={error} />
+          )}
+        </div>
       </div>
-    );
-  }
-}
+    </div>
+  );
+};
 
 export default App;
